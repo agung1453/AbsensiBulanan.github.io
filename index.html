@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absensi Bulanan</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            text-align: center;
+            padding: 8px;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+    </style>
+</head>
+<body>
+    <h2>Absensi Bulanan</h2>
+    <label for="month">Pilih Bulan:</label>
+    <input type="month" id="month" onchange="generateTableAndSaveMonth()">
+    <br><br>
+    <table id="attendanceTable">
+        <thead>
+            <tr>
+                <th>Tanggal</th>
+                <th>Hari</th>
+                <th>Tahun</th>
+                <th>Hadir</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Rows will be generated dynamically -->
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="3"><strong>Total Kehadiran</strong></td>
+                <td id="totalPresent">0</td>
+            </tr>
+        </tfoot>
+    </table>
+    <br>
+    <button onclick="saveAttendance()">Simpan Absensi</button>
+    <button onclick="exportData()">Ekspor Data</button>
+    <input type="file" id="fileInput" onchange="importData()">
+    <script>
+        function generateTableAndSaveMonth() {
+            saveSelectedMonth();
+            generateTable();
+        }
+
+        function saveSelectedMonth() {
+            const monthInput = document.getElementById('month').value;
+            if (monthInput) {
+                document.cookie = `selectedMonth=${monthInput}; path=/; max-age=31536000`;
+            }
+        }
+
+        function loadSelectedMonth() {
+            const cookies = document.cookie.split('; ');
+            const monthCookie = cookies.find(row => row.startsWith('selectedMonth='));
+            if (monthCookie) {
+                const selectedMonth = monthCookie.split('=')[1];
+                document.getElementById('month').value = selectedMonth;
+            }
+        }
+
+        function generateTable() {
+            const tableBody = document.getElementById('attendanceTable').querySelector('tbody');
+            const monthInput = document.getElementById('month').value;
+
+            if (!monthInput) {
+                alert('Pilih bulan terlebih dahulu.');
+                return;
+            }
+
+            const [year, month] = monthInput.split('-');
+            const daysInMonth = new Date(year, month, 0).getDate();
+            const weekdays = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+
+            tableBody.innerHTML = '';
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, month - 1, day);
+                const weekday = weekdays[date.getDay()];
+
+                const row = document.createElement('tr');
+
+                const dateCell = document.createElement('td');
+                dateCell.textContent = day;
+
+                const weekdayCell = document.createElement('td');
+                weekdayCell.textContent = weekday;
+
+                const yearCell = document.createElement('td');
+                yearCell.textContent = year;
+
+                const checkboxCell = document.createElement('td');
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.dataset.day = day;
+                checkbox.addEventListener('change', updateTotal);
+                checkboxCell.appendChild(checkbox);
+
+                row.appendChild(dateCell);
+                row.appendChild(weekdayCell);
+                row.appendChild(yearCell);
+                row.appendChild(checkboxCell);
+
+                tableBody.appendChild(row);
+            }
+
+            loadAttendance();
+            updateTotal();
+        }
+
+        function updateTotal() {
+            const checkboxes = document.querySelectorAll('tbody input[type="checkbox"]');
+            const totalPresent = Array.from(checkboxes).filter(checkbox => checkbox.checked).length;
+            document.getElementById('totalPresent').textContent = totalPresent;
+        }
+
+        function saveAttendance() {
+            const data = {};
+            const rows = document.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                const day = row.children[0].textContent;
+                const year = row.children[2].textContent;
+                const checkbox = row.children[3].querySelector('input');
+                data[`${year}-${day}`] = checkbox.checked;
+            });
+            document.cookie = `attendance=${JSON.stringify(data)}; path=/; max-age=31536000`;
+            alert('Absensi berhasil disimpan!');
+        }
+
+        function loadAttendance() {
+            const cookies = document.cookie.split('; ');
+            const attendanceCookie = cookies.find(row => row.startsWith('attendance='));
+            if (!attendanceCookie) return;
+
+            const data = JSON.parse(attendanceCookie.split('=')[1]);
+            const rows = document.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                const day = row.children[0].textContent;
+                const year = row.children[2].textContent;
+                const checkbox = row.children[3].querySelector('input');
+                checkbox.checked = data[`${year}-${day}`] || false;
+            });
+        }
+
+        function exportData() {
+            const rows = document.querySelectorAll('tbody tr');
+            const data = {};
+            rows.forEach(row => {
+                const day = row.children[0].textContent;
+                const year = row.children[2].textContent;
+                const checkbox = row.children[3].querySelector('input');
+                data[`${year}-${day}`] = checkbox.checked;
+            });
+            const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'attendance.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importData() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                const data = JSON.parse(event.target.result);
+                const rows = document.querySelectorAll('tbody tr');
+                rows.forEach(row => {
+                    const day = row.children[0].textContent;
+                    const year = row.children[2].textContent;
+                    const checkbox = row.children[3].querySelector('input');
+                    checkbox.checked = data[`${year}-${day}`] || false;
+                });
+
+                updateTotal();
+                alert('Data berhasil diimpor!');
+            };
+            reader.readAsText(file);
+        }
+
+        // Load selected month and attendance data on page load
+        window.onload = function () {
+            loadSelectedMonth();
+            generateTable();
+        };
+    </script>
+</body>
+                             </html>

@@ -1,28 +1,37 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Absensi Bulanan</title>
     <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
         table {
-            border-collapse: collapse;
             width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
         }
         th, td {
-            border: 1px solid #ccc;
+            border: 1px solid #ddd;
             text-align: center;
             padding: 8px;
         }
         th {
             background-color: #f4f4f4;
         }
+        textarea {
+            width: 90%;
+            resize: none;
+        }
     </style>
 </head>
 <body>
     <h2>Absensi Bulanan</h2>
     <label for="month">Pilih Bulan:</label>
-    <input type="month" id="month" onchange="generateTableAndSaveMonth()">
+    <input type="month" id="month" onchange="generateTable()">
     <br><br>
     <table id="attendanceTable">
         <thead>
@@ -30,16 +39,20 @@
                 <th>Tanggal</th>
                 <th>Hari</th>
                 <th>Tahun</th>
-                <th>Hadir</th>
+                <th>Masuk Siang</th>
+                <th>Masuk Malam</th>
+                <th>Catatan</th>
             </tr>
         </thead>
         <tbody>
-            <!-- Rows will be generated dynamically -->
+            <!-- Tabel akan diisi secara dinamis -->
         </tbody>
         <tfoot>
             <tr>
                 <td colspan="3"><strong>Total Kehadiran</strong></td>
-                <td id="totalPresent">0</td>
+                <td id="totalSiang">0</td>
+                <td id="totalMalam">0</td>
+                <td></td>
             </tr>
         </tfoot>
     </table>
@@ -48,68 +61,34 @@
     <button onclick="exportData()">Ekspor Data</button>
     <input type="file" id="fileInput" onchange="importData()">
     <script>
-        function generateTableAndSaveMonth() {
-            saveSelectedMonth();
-            generateTable();
-        }
-
-        function saveSelectedMonth() {
-            const monthInput = document.getElementById('month').value;
-            if (monthInput) {
-                document.cookie = `selectedMonth=${monthInput}; path=/; max-age=31536000`;
-            }
-        }
-
-        function loadSelectedMonth() {
-            const cookies = document.cookie.split('; ');
-            const monthCookie = cookies.find(row => row.startsWith('selectedMonth='));
-            if (monthCookie) {
-                const selectedMonth = monthCookie.split('=')[1];
-                document.getElementById('month').value = selectedMonth;
-            }
-        }
-
         function generateTable() {
-            const tableBody = document.getElementById('attendanceTable').querySelector('tbody');
-            const monthInput = document.getElementById('month').value;
-
+            const monthInput = document.getElementById("month").value;
             if (!monthInput) {
-                alert('Pilih bulan terlebih dahulu.');
+                alert("Pilih bulan terlebih dahulu.");
                 return;
             }
 
-            const [year, month] = monthInput.split('-');
+            const [year, month] = monthInput.split("-");
             const daysInMonth = new Date(year, month, 0).getDate();
-            const weekdays = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+            const weekdays = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
-            tableBody.innerHTML = '';
+            document.cookie = `selectedMonth=${monthInput}; path=/; max-age=31536000`;
+
+            const tableBody = document.querySelector("#attendanceTable tbody");
+            tableBody.innerHTML = "";
+
             for (let day = 1; day <= daysInMonth; day++) {
                 const date = new Date(year, month - 1, day);
-                const weekday = weekdays[date.getDay()];
+                const row = document.createElement("tr");
 
-                const row = document.createElement('tr');
-
-                const dateCell = document.createElement('td');
-                dateCell.textContent = day;
-
-                const weekdayCell = document.createElement('td');
-                weekdayCell.textContent = weekday;
-
-                const yearCell = document.createElement('td');
-                yearCell.textContent = year;
-
-                const checkboxCell = document.createElement('td');
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.dataset.day = day;
-                checkbox.addEventListener('change', updateTotal);
-                checkboxCell.appendChild(checkbox);
-
-                row.appendChild(dateCell);
-                row.appendChild(weekdayCell);
-                row.appendChild(yearCell);
-                row.appendChild(checkboxCell);
-
+                row.innerHTML = `
+                    <td>${day}</td>
+                    <td>${weekdays[date.getDay()]}</td>
+                    <td>${year}</td>
+                    <td><input type="checkbox" data-day="${day}" data-time="siang"></td>
+                    <td><input type="checkbox" data-day="${day}" data-time="malam"></td>
+                    <td><textarea rows="2" data-day="${day}" class="note"></textarea></td>
+                `;
                 tableBody.appendChild(row);
             }
 
@@ -118,84 +97,127 @@
         }
 
         function updateTotal() {
-            const checkboxes = document.querySelectorAll('tbody input[type="checkbox"]');
-            const totalPresent = Array.from(checkboxes).filter(checkbox => checkbox.checked).length;
-            document.getElementById('totalPresent').textContent = totalPresent;
+            const siangCheckboxes = document.querySelectorAll('input[data-time="siang"]');
+            const malamCheckboxes = document.querySelectorAll('input[data-time="malam"]');
+            const totalSiang = Array.from(siangCheckboxes).filter(cb => cb.checked).length;
+            const totalMalam = Array.from(malamCheckboxes).filter(cb => cb.checked).length;
+
+            document.getElementById("totalSiang").textContent = totalSiang;
+            document.getElementById("totalMalam").textContent = totalMalam;
         }
 
         function saveAttendance() {
             const data = {};
-            const rows = document.querySelectorAll('tbody tr');
+            const monthInput = document.getElementById("month").value;
+
+            if (!monthInput) {
+                alert("Pilih bulan terlebih dahulu.");
+                return;
+            }
+
+            const [year, month] = monthInput.split("-");
+            const rows = document.querySelectorAll("#attendanceTable tbody tr");
+
             rows.forEach(row => {
                 const day = row.children[0].textContent;
-                const year = row.children[2].textContent;
-                const checkbox = row.children[3].querySelector('input');
-                data[`${year}-${day}`] = checkbox.checked;
+                const siangCheckbox = row.querySelector('input[data-time="siang"]');
+                const malamCheckbox = row.querySelector('input[data-time="malam"]');
+                const note = row.querySelector(".note");
+
+                data[`${year}-${month}-${day}-siang`] = siangCheckbox.checked;
+                data[`${year}-${month}-${day}-malam`] = malamCheckbox.checked;
+                data[`${year}-${month}-${day}-note`] = note.value;
             });
+
             document.cookie = `attendance=${JSON.stringify(data)}; path=/; max-age=31536000`;
-            alert('Absensi berhasil disimpan!');
+            alert("Data absensi berhasil disimpan!");
         }
 
         function loadAttendance() {
-            const cookies = document.cookie.split('; ');
-            const attendanceCookie = cookies.find(row => row.startsWith('attendance='));
+            const cookies = document.cookie.split("; ");
+            const attendanceCookie = cookies.find(cookie => cookie.startsWith("attendance="));
+
             if (!attendanceCookie) return;
 
-            const data = JSON.parse(attendanceCookie.split('=')[1]);
-            const rows = document.querySelectorAll('tbody tr');
-            rows.forEach(row => {
-                const day = row.children[0].textContent;
-                const year = row.children[2].textContent;
-                const checkbox = row.children[3].querySelector('input');
-                checkbox.checked = data[`${year}-${day}`] || false;
+            const data = JSON.parse(decodeURIComponent(attendanceCookie.split("=")[1]));
+
+            const siangCheckboxes = document.querySelectorAll('input[data-time="siang"]');
+            const malamCheckboxes = document.querySelectorAll('input[data-time="malam"]');
+            const notes = document.querySelectorAll(".note");
+
+            siangCheckboxes.forEach(cb => {
+                const day = cb.dataset.day;
+                cb.checked = data[`${document.getElementById("month").value}-${day}-siang`] || false;
             });
+
+            malamCheckboxes.forEach(cb => {
+                const day = cb.dataset.day;
+                cb.checked = data[`${document.getElementById("month").value}-${day}-malam`] || false;
+            });
+
+            notes.forEach(note => {
+                const day = note.dataset.day;
+                note.value = data[`${document.getElementById("month").value}-${day}-note`] || "";
+            });
+
+            updateTotal();
         }
 
         function exportData() {
-            const rows = document.querySelectorAll('tbody tr');
-            const data = {};
-            rows.forEach(row => {
-                const day = row.children[0].textContent;
-                const year = row.children[2].textContent;
-                const checkbox = row.children[3].querySelector('input');
-                data[`${year}-${day}`] = checkbox.checked;
-            });
-            const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'attendance.json';
-            a.click();
-            URL.revokeObjectURL(url);
+            const attendanceData = document.cookie
+                .split("; ")
+                .find(row => row.startsWith("attendance="));
+
+            if (attendanceData) {
+                const data = attendanceData.split("=")[1];
+                const blob = new Blob([decodeURIComponent(data)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "attendance.json";
+                a.click();
+                URL.revokeObjectURL(url);
+            } else {
+                alert("Tidak ada data untuk diekspor.");
+            }
         }
 
         function importData() {
-            const fileInput = document.getElementById('fileInput');
+            const fileInput = document.getElementById("fileInput");
             const file = fileInput.files[0];
+
             if (!file) return;
 
             const reader = new FileReader();
             reader.onload = function (event) {
-                const data = JSON.parse(event.target.result);
-                const rows = document.querySelectorAll('tbody tr');
-                rows.forEach(row => {
-                    const day = row.children[0].textContent;
-                    const year = row.children[2].textContent;
-                    const checkbox = row.children[3].querySelector('input');
-                    checkbox.checked = data[`${year}-${day}`] || false;
-                });
-
-                updateTotal();
-                alert('Data berhasil diimpor!');
+                document.cookie = `attendance=${encodeURIComponent(event.target.result)}; path=/; max-age=31536000`;
+                alert("Data absensi berhasil diimpor!");
+                loadAttendance();
             };
             reader.readAsText(file);
         }
 
-        // Load selected month and attendance data on page load
+        function loadSelectedMonth() {
+            const cookies = document.cookie.split("; ");
+            const selectedMonthCookie = cookies.find(cookie => cookie.startsWith("selectedMonth="));
+
+            if (selectedMonthCookie) {
+                const selectedMonth = selectedMonthCookie.split("=")[1];
+                document.getElementById("month").value = selectedMonth;
+                generateTable();
+            }
+        }
+
         window.onload = function () {
             loadSelectedMonth();
-            generateTable();
         };
+
+        document.addEventListener("change", event => {
+            if (event.target.type === "checkbox") {
+                updateTotal();
+            }
+        });
     </script>
 </body>
-                             </html>
+    </html>
